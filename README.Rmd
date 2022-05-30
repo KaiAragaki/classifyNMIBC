@@ -1,0 +1,51 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# classifyNMIBC
+
+This package implements a Pearson nearest-centroid classifier that assigns class labels to single samples according to the four transcriptomic UROMOL2021 classes of non-muscle-invasive bladder cancer (NMIBC): class 1, class 2a, class 2b and class 3.
+
+The classifier code was adapted from the consensusMIBC classifier: Kamoun, A et. al. A Consensus Molecular Classification of Muscle-invasive Bladder Cancer, Eur Urol (2019), doi: https://doi.org/10.1016/j.eururo.2019.09.006
+Both classifiers can be found on our online web application: http://nmibc-class.dk
+
+A smaller, example data set is provided to run the classifier.
+
+## Installation
+
+You can install the development version of classifyNMIBC from [GitHub](https://github.com/) with:
+
+```{r, eval=FALSE}
+# install.packages("devtools")
+devtools::install_github("KaiAragaki/classifyNMIBC")
+```
+
+## Citation 
+
+Please cite _Lindskrog and Prip et al. An integrated multi-omics analysis identifies prognostic molecular subtypes of non-muscle-invasive bladder cancer. Nat Commun. 2021. PMID: 33863885. DOI: 10.1038/s41467-021-22465-w_
+
+## Example
+
+```{r}
+library(classifyNMIBC)
+head(test_data)
+```
+ 
+
+``` {r}
+test_data |> 
+  classifyNMIBC(min_cor = 0.2, gene_id = "ensembl_gene_ID", tidy = FALSE) |> 
+  head()
+```
+
