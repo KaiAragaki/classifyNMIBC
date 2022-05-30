@@ -2,41 +2,52 @@
 % Please edit documentation in R/classifyNMIBC.R
 \name{classifyNMIBC}
 \alias{classifyNMIBC}
-\title{Transcriptomic UROMOL2021 classes of non-muscle-invasive bladder cancer (NMIBC) samples}
+\title{Transcriptomic UROMOL2021 classes of non-muscle-invasive bladder cancer
+(NMIBC) samples}
 \usage{
 classifyNMIBC(
   x,
-  minCor = 0.2,
-  gene_id = c("ensembl_gene_ID", "hgnc_symbol")[1]
+  min_cor = 0.2,
+  gene_id = c("ensembl_gene_ID", "hgnc_symbol"),
+  tidy = FALSE
 )
 }
 \arguments{
-\item{x}{dataframe with unique genes in rows and samples to be classified in columns (or single named vector of gene expression values).
-RNA-seq data needs to be log-transformed and micro-array data should be normalized. Gene names may be supplied as Ensembl gene IDs or HUGO gene symbols.}
+\item{x}{\code{data.frame} with unique genes as rows and samples as columns.
+RNA-seq data needs to be log-transformed and micro-array data should be
+normalized.}
 
-\item{minCor}{a numeric value specifying a minimal threshold for best Pearson's correlation between a sample's gene expression profile and centroids profiles.
-A sample showing no correlation above this threshold will remain unclassifed and prediction results will be set to NA. Default minCor value is 0.2.}
+\item{min_cor}{Numeric specifying a minimal threshold for best Pearson's
+correlation between a sample's gene expression profile and centroids
+profiles. A sample showing no correlation above this threshold will remain
+unclassifed and prediction results will be set to NA.}
 
-\item{gene_id}{a character value specifying the type of gene identifiers used for the names/rownames of 'x',
-ensembl_gene_ID for Ensembl gene IDs or hgnc_symbol for HUGO gene symbols.}
+\item{gene_id}{Character specifying the type of gene identifiers used for the
+rownames or first column of \code{x}}
+
+\item{tidy}{Logical. If TRUE, assumes the first column contains the gene
+identifiers. Otherwise, assumes IDs are rownames}
 }
 \value{
-A dataframe with classification results. The NMIBC_Class column returns the predicted class labels of the samples.
-The cor_pval column returns the p-value associated with the Pearson's correlation between the sample and the nearest centroid.
-The separationLevel gives a measure (ranging from 0 to 1) of how a sample is representative of its consensus class,
-with 0 meaning the sample is too close to the other classes to be confidently assigned to one class label, and 1 meaning the sample is very representative of its class.
-This separationLevel is measured as follows: (correlation to nearest centroid - correlation to second nearest centroid) / median difference of sample-to-centroid correlation.
-The remaing four columns return the Pearson's correlation values for each sample and each centroid.
-NMIBC_Class predictions are set to NA if the minCor condition is not verified.
+A \code{tibble} containing:
+\describe{
+\item{estimate}{Pearson correlation of a given \code{sample} to the given \code{class} centroid}
+\item{conf.low, conf.high}{low and high end of 95\% confidence interval}
+\item{nearest}{centroid for which the sample has the highest correlation to}
+\item{statistic}{t-statistic}
+\item{parameter}{degrees of freedom}
+\item{sep_lvl}{(Highest Correlation - 2nd Highest Correlation)/median(Distance to highest correlation)}
+}
 }
 \description{
-This package performs Pearson nearest-centroid classification according to the transcriptomic classes of NMIBC based on gene expression profiles.
+This package performs Pearson nearest-centroid classification according to
+the transcriptomic classes of NMIBC based on gene expression profiles.
 }
 \note{
-This classifier was built similarly to the published tool for the consensus classes of MIBC:
-Kamoun, A et. al. A Consensus Molecular Classification of Muscle-invasive Bladder Cancer. Eur Uro (2019), doi: https://doi.org/10.1016/j.eururo.2019.09.006
-
-Alternatively, you can classifiy samples through our online web application: http://nmibc-class.dk
+This classifier was built similarly to the published tool for the
+consensus classes of MIBC: Kamoun, A et. al. A Consensus Molecular
+Classification of Muscle-invasive Bladder Cancer. Eur Uro (2019), doi:
+https://doi.org/10.1016/j.eururo.2019.09.006
 }
 \examples{
 data(test_data)

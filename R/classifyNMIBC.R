@@ -1,21 +1,30 @@
-#' Transcriptomic UROMOL2021 classes of non-muscle-invasive bladder cancer (NMIBC) samples
+#' Transcriptomic UROMOL2021 classes of non-muscle-invasive bladder cancer
+#' (NMIBC) samples
 #'
-#' This package performs Pearson nearest-centroid classification according to the transcriptomic classes of NMIBC based on gene expression profiles.
+#' This package performs Pearson nearest-centroid classification according to
+#' the transcriptomic classes of NMIBC based on gene expression profiles.
 #'
-#' @param x dataframe with unique genes in rows and samples to be classified in columns (or single named vector of gene expression values).
-#' RNA-seq data needs to be log-transformed and micro-array data should be normalized. Gene names may be supplied as Ensembl gene IDs or HUGO gene symbols.
-#' @param minCor a numeric value specifying a minimal threshold for best Pearson's correlation between a sample's gene expression profile and centroids profiles.
-#' A sample showing no correlation above this threshold will remain unclassifed and prediction results will be set to NA. Default minCor value is 0.2.
-#' @param gene_id a character value specifying the type of gene identifiers used for the names/rownames of 'x',
-#' ensembl_gene_ID for Ensembl gene IDs or hgnc_symbol for HUGO gene symbols.
+#' @param x `data.frame` with unique genes as rows and samples as columns.
+#'   RNA-seq data needs to be log-transformed and micro-array data should be
+#'   normalized.
+#' @param min_cor Numeric specifying a minimal threshold for best Pearson's
+#'   correlation between a sample's gene expression profile and centroids
+#'   profiles. A sample showing no correlation above this threshold will remain
+#'   unclassifed and prediction results will be set to NA.
+#' @param gene_id Character specifying the type of gene identifiers used for the
+#'   rownames or first column of `x`
+#' @param tidy Logical. If TRUE, assumes the first column contains the gene
+#'   identifiers. Otherwise, assumes IDs are rownames
 #'
-#' @return A dataframe with classification results. The NMIBC_Class column returns the predicted class labels of the samples.
-#' The cor_pval column returns the p-value associated with the Pearson's correlation between the sample and the nearest centroid.
-#' The separationLevel gives a measure (ranging from 0 to 1) of how a sample is representative of its consensus class,
-#' with 0 meaning the sample is too close to the other classes to be confidently assigned to one class label, and 1 meaning the sample is very representative of its class.
-#' This separationLevel is measured as follows: (correlation to nearest centroid - correlation to second nearest centroid) / median difference of sample-to-centroid correlation.
-#' The remaing four columns return the Pearson's correlation values for each sample and each centroid.
-#' NMIBC_Class predictions are set to NA if the minCor condition is not verified.
+#' @return A `tibble` containing:
+#' \describe{
+#'   \item{estimate}{Pearson correlation of a given `sample` to the given `class` centroid}
+#'   \item{conf.low, conf.high}{low and high end of 95% confidence interval}
+#'   \item{nearest}{centroid for which the sample has the highest correlation to}
+#'   \item{statistic}{t-statistic}
+#'   \item{parameter}{degrees of freedom}
+#'   \item{sep_lvl}{(Highest Correlation - 2nd Highest Correlation)/median(Distance to highest correlation)}
+#' }
 #'
 #' @export
 #'
@@ -23,44 +32,64 @@
 #' data(test_data)
 #' classifyNMIBC(test_data)
 #'
-#' @note This classifier was built similarly to the published tool for the consensus classes of MIBC:
-#' Kamoun, A et. al. A Consensus Molecular Classification of Muscle-invasive Bladder Cancer. Eur Uro (2019), doi: https://doi.org/10.1016/j.eururo.2019.09.006
-#'
-#' Alternatively, you can classifiy samples through our online web application: http://nmibc-class.dk
+#' @note This classifier was built similarly to the published tool for the
+#'   consensus classes of MIBC: Kamoun, A et. al. A Consensus Molecular
+#'   Classification of Muscle-invasive Bladder Cancer. Eur Uro (2019), doi:
+#'   https://doi.org/10.1016/j.eururo.2019.09.006
+#' @importFrom dplyr .data
 
+classifyNMIBC <- function(x, min_cor = 0.2, gene_id = c("ensembl_gene_ID", "hgnc_symbol"), tidy = FALSE) {
+    gene_id <- rlang::arg_match(gene_id)
 
+    # TODO: Warn if duplicate gene_id
 
-classifyNMIBC <- function(x, minCor = .2, gene_id = c("ensembl_gene_ID", "hgnc_symbol")[1]){
+    # If tidy, assume first col is gene_id. Make it rownames and drop the col.
+    if (tidy) {
+      x <- as.data.frame(x)
+      rownames(x) <- x[, 1]
+      x <- x[, -1]
+    }
 
-  data(centroids)
+    # Order genes the same in dataset as in centroids
+    y <- x[match(classifyNMIBC::centroids[[gene_id]], rownames(x)),]
 
-  classes <- c("Class_1", "Class_2a", "Class_2b", "Class_3")
+    if (nrow(y) == 0)
+      stop(
+        "Empty intersection between profiled genes and the genes used for classification.\n Make sure that gene names correspond to the type of identifiers specified by the gene_id argument"
+      )
+    if (nrow(y) < 0.6 * nrow(classifyNMIBC::centroids))
+      warning(
+        "Input gene expression profiles include less than 60% of the genes used for classification. Results may not be relevant"
+      )
 
-  gkeep <- intersect(centroids[, gene_id], rownames(x))
-  if (length(gkeep) == 0) stop("Empty intersection between profiled genes and the genes used for classification.\n Make sure that gene names correspond to the type of identifiers specified by the gene_id argument")
-  if (length(gkeep) < 0.6 * nrow(centroids)) warning("Input gene expression profiles include less than 60% of the genes used for classification. Results may not be relevant")
+    array_cor_test <- function(y, class) {
+      y |>
+        apply(2, \(y) stats::cor.test(y, classifyNMIBC::centroids[[class]]) |> broom::tidy()) |>
+        dplyr::bind_rows() |>
+        dplyr::mutate(sample = colnames(y), class = class)
+    }
 
-  cor.dat <- as.data.frame(cor(x[gkeep, ], centroids[match(gkeep, centroids[, gene_id]), classes], use = "complete.obs"), row.names = colnames(x))
+    cor_res <-
+      dplyr::bind_rows(
+        c1 = array_cor_test(y, "Class_1"),
+        c2a = array_cor_test(y, "Class_2a"),
+        c2b = array_cor_test(y, "Class_2b"),
+        c3 = array_cor_test(y, "Class_3")
+      ) |>
+      dplyr::group_by(.data$sample) |>
+      dplyr::arrange(dplyr::desc(.data$estimate)) |>
+      dplyr::mutate(
+        nearest = .data$class[1],
+        nearest_cor = .data$estimate[1],
+        dist_to_sec = .data$nearest_cor - .data$estimate[2],
+        delta_med = stats::median(.data$nearest_cor - .data$estimate),
+        sep_lvl = .data$dist_to_sec / .data$delta_med,
+        nearest = ifelse(.data$nearest_cor < min_cor, NA_character_, .data$nearest),
+        sep_lvl = ifelse(.data$nearest_cor < min_cor, NA_real_, .data$sep_lvl)
+      ) |>
+      dplyr::ungroup() |>
+      dplyr::select(c("sample", "class", "estimate", "conf.low", "conf.high", "nearest", "statistic", "parameter", "sep_lvl")) |>
+      dplyr::arrange(.data$sample, .data$class)
 
-  # Best correlated centroid
-  cor.dat$nearestCentroid <- apply(cor.dat, 1, function(y){classes[which.max(y)]})
-  cor.dat$corToNearest <- apply(cor.dat[, classes], 1, max)
-  cor.dat$cor_pval <- sapply(colnames(x), function(smp){
-    cor.test(x[gkeep, smp], centroids[match(gkeep, centroids[, gene_id]), cor.dat[smp, "nearestCentroid"]])$p.value
-  })
-
-  # Separation level metrics
-  cor.dat$deltaSecondNearest <- apply(cor.dat$corToNearest - cor.dat[, classes], 1, function(x){sort(x)[2]})
-  cor.dat$deltaMed <- apply(cor.dat$corToNearest - cor.dat[, classes], 1, median)
-  cor.dat$separationLevel <- cor.dat$deltaSecondNearest/cor.dat$deltaMed
-
-  cor.dat$NMIBC_class <- cor.dat$nearestCentroid
-
-  # Set to NA if best correlation < minCor
-  try(cor.dat[which(cor.dat$corToNearest < minCor), "NMIBC_Class"] <-  NA)
-  try(cor.dat[which(cor.dat$corToNearest < minCor), "separationLevel"] <-  NA)
-
-  cor.dat <- cor.dat[, c("NMIBC_class" , "cor_pval", "separationLevel", classes)]
-  return(cor.dat)
+    cor_res
 }
-
